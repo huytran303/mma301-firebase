@@ -1,7 +1,7 @@
 {
   "name": "mma301-firebase",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "App.js",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.0",
