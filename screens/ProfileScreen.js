@@ -119,7 +119,13 @@ export default function ProfileScreen({ session, onSession, onSignOut }) {
         </Text>
         <TouchableOpacity
           style={[styles.button, { backgroundColor: '#059669', marginTop: 10 }]}
-          onPress={() => sendLocalNotification('Xin chào 👋', 'Đây là thông báo demo từ app!')}
+          onPress={async () => {
+            try {
+              await sendLocalNotification('Xin chào 👋', 'Đây là thông báo demo từ app!');
+            } catch (e) {
+              Alert.alert('Không gửi được thông báo', e.message);
+            }
+          }}
         >
           <Text style={styles.buttonText}>Gửi thông báo thử</Text>
         </TouchableOpacity>

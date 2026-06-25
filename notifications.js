@@ -51,8 +51,17 @@ export async function registerForPushNotificationsAsync() {
 
 // Gửi 1 local notification ngay để DEMO (chạy được cả trên Expo Go/Snack)
 export async function sendLocalNotification(title, body) {
+  // Đảm bảo có quyền trước khi gửi
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    const req = await Notifications.requestPermissionsAsync();
+    if (req.status !== 'granted') {
+      throw new Error('Chưa cấp quyền thông báo. Vào Cài đặt để bật.');
+    }
+  }
+  // trigger: null = hiện ngay lập tức (tương thích expo-notifications SDK 54)
   await Notifications.scheduleNotificationAsync({
     content: { title, body, sound: true },
-    trigger: { seconds: 2 },
+    trigger: null,
   });
 }
