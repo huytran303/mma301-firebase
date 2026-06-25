@@ -1,73 +1,70 @@
-# Firebase App (Expo + Snack)
+# mma301-firebase (Expo + Snack)
 
-Ứng dụng React Native (Expo) dùng **Firebase** để:
+Ứng dụng React Native (Expo) dùng **Firebase** (qua **REST API**) để:
 
-1. **Đăng nhập + quản lý người dùng** — đăng nhập/đăng ký bằng Firebase Authentication (Email/Password). Người dùng có thể cập nhật: **email, số điện thoại, mật khẩu, địa chỉ**.
+1. **Đăng nhập + quản lý người dùng** — Firebase Authentication (Email/Password).
+   Người dùng cập nhật được: **email, số điện thoại, mật khẩu, địa chỉ**.
 2. **Push Notification (FCM)** qua `expo-notifications`.
+
+> ⚠️ Vì sao dùng REST API thay vì package `firebase`?
+> Snack (snackager) **không bundle được** package `firebase` (firebase dùng trường
+> `exports` mà Snack chưa hỗ trợ). Nên app gọi thẳng Firebase REST API bằng `fetch`
+> → chạy được trên Snack mà vẫn dùng Firebase thật.
 
 ## Cấu trúc
 
 ```
-App.js                 # Theo dõi trạng thái đăng nhập, điều hướng
-firebaseConfig.js      # Khởi tạo Firebase (Auth + Firestore)  -> ĐIỀN CONFIG Ở ĐÂY
-notifications.js       # Đăng ký push + gửi local notification
+App.js                 # Khôi phục phiên + điều hướng Auth <-> Profile
+firebaseConfig.js      # API key + projectId
+firebaseRest.js        # Gọi Auth + Firestore qua REST, lưu phiên bằng AsyncStorage
+notifications.js       # Push / local notification
 screens/
   AuthScreen.js        # Đăng nhập / Đăng ký
   ProfileScreen.js     # Cập nhật email, sđt, mật khẩu, địa chỉ + push
 ```
 
-## Bước 1 — Tạo project Firebase
+## Cấu hình Firebase (BẮT BUỘC)
 
-1. Vào https://console.firebase.google.com → **Add project**.
-2. Thêm một **Web App** (biểu tượng `</>`) → copy đoạn `firebaseConfig`.
-3. Dán config vào `firebaseConfig.js` (thay các giá trị `YOUR_...`).
-4. **Authentication** → Sign-in method → bật **Email/Password**.
-5. **Firestore Database** → Create database (chọn *test mode* khi đang học).
+Project: **fir-mma-ac196** (đã điền sẵn trong `firebaseConfig.js`).
 
-## Bước 2 — Chạy thử cục bộ (tùy chọn)
+1. **Authentication** → Sign-in method → bật **Email/Password**. ✅ (đã bật)
+2. **Firestore Database** → bấm **Create database** → chọn location → **Start in test mode**
+   (hoặc dán Rules bên dưới). ⚠️ **Bước này bắt buộc** — hiện database chưa được tạo.
 
-```bash
-npm install
-npx expo start
+Rules gợi ý (mỗi user chỉ đọc/ghi document của mình):
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
 ```
 
-Quét QR bằng app **Expo Go** trên điện thoại.
+## Đưa lên Snack (lấy link nộp)
 
-## Bước 3 — Đưa lên Snack (nộp link online)
+Cách 1 — Import git:
+- https://snack.expo.dev → **Import git repository** → `https://github.com/huytran303/mma301-firebase.git`
 
-Cách nhanh nhất:
+Cách 2 — Paste tay (chắc chắn nhất):
+1. Mở Snack mới, chọn SDK **54**.
+2. Tạo & dán 6 file: `App.js`, `firebaseConfig.js`, `firebaseRest.js`, `notifications.js`,
+   `screens/AuthScreen.js`, `screens/ProfileScreen.js`.
+3. Trong `package.json` của Snack thêm dependencies:
+   `@react-native-async-storage/async-storage`, `expo-notifications`, `expo-constants`
+   (bấm "Add dependency", Snack tự chọn version hợp SDK).
+4. **Save** → copy link để nộp.
 
-1. Vào https://snack.expo.dev
-2. Tạo Snack mới → trong Snack, mở từng file và **dán nội dung** các file:
-   `App.js`, `firebaseConfig.js`, `notifications.js`, `screens/AuthScreen.js`, `screens/ProfileScreen.js`.
-3. Mở `package.json` của Snack và thêm dependencies:
-   ```json
-   "firebase": "*",
-   "@react-native-async-storage/async-storage": "*",
-   "expo-notifications": "*",
-   "expo-device": "*"
-   ```
-   (Snack sẽ tự cài bản tương thích với SDK đang chọn.)
-4. Nhớ dán **firebaseConfig** thật của bạn vào `firebaseConfig.js`.
-5. Bấm **Save** → copy đường link Snack để **nộp**.
+## Lưu ý Push Notification
 
-> Mẹo: bạn cũng có thể đẩy code lên GitHub rồi import vào Snack qua
-> `https://snack.expo.dev/?platform=android` → "Import git repository".
+- **Local notification** (nút "Gửi thông báo thử") chạy được ngay trên Expo Go.
+- **Remote push thật qua FCM** chỉ chạy đầy đủ khi **EAS build** app riêng (giới hạn của Expo Go/Snack).
 
-## Lưu ý về Push Notification trên Snack / Expo Go
+## Đã verify
 
-- **Local notification** (nút "Gửi thông báo thử") **chạy được ngay** trên điện thoại thật.
-- **Remote push thật** (server gửi qua FCM): trên Expo Go (SDK 53+) bị giới hạn,
-  chỉ hoạt động đầy đủ khi **EAS build** một bản app riêng. Lúc đó `expo-notifications`
-  sẽ gửi/nhận push thông qua **FCM** ở phía Android.
-- Màn hình Profile có hiển thị **Expo Push Token** (nếu lấy được) để dùng test gửi push.
-
-## Tính năng đã làm
-
-- [x] Đăng nhập / Đăng ký bằng email + mật khẩu (Firebase Auth)
-- [x] Lưu phiên đăng nhập (AsyncStorage persistence)
-- [x] Cập nhật **email** (có reauthenticate)
-- [x] Cập nhật **mật khẩu** (có reauthenticate)
-- [x] Cập nhật **số điện thoại** + **địa chỉ** (lưu Firestore)
-- [x] Đăng xuất
-- [x] Xin quyền + lấy push token + gửi local notification (FCM/expo-notifications)
+- [x] Auth REST: đăng ký, đăng nhập, đổi email, đổi mật khẩu (test end-to-end PASS)
+- [x] Firestore REST: ghi/đọc sđt + địa chỉ (chạy được sau khi tạo Firestore database)
+- [x] Lưu phiên đăng nhập bằng AsyncStorage + tự refresh token
+- [x] Push / local notification

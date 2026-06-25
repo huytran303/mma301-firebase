@@ -1,17 +1,12 @@
-// screens/AuthScreen.js — Màn hình Đăng nhập / Đăng ký
+// screens/AuthScreen.js — Đăng nhập / Đăng ký (Firebase REST API)
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebaseConfig';
+import { signIn, signUp, setUserDoc } from '../firebaseRest';
 
-export default function AuthScreen() {
+export default function AuthScreen({ onSignedIn }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,19 +22,20 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        const session = await signIn(email.trim(), password);
+        onSignedIn(session);
       } else {
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const session = await signUp(email.trim(), password);
         // Lưu thông tin mở rộng vào Firestore
-        await setDoc(doc(db, 'users', cred.user.uid), {
+        await setUserDoc(session.idToken, session.localId, {
           email: email.trim(),
           phone: phone.trim(),
           address: address.trim(),
-          createdAt: new Date().toISOString(),
         });
+        onSignedIn(session);
       }
     } catch (e) {
-      Alert.alert('Lỗi', mapError(e.code) || e.message);
+      Alert.alert('Lỗi', mapError(e.message));
     } finally {
       setLoading(false);
     }
@@ -54,43 +50,22 @@ export default function AuthScreen() {
         <Text style={styles.logo}>🔥 Firebase App</Text>
         <Text style={styles.title}>{isLogin ? 'Đăng nhập' : 'Đăng ký tài khoản'}</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Mật khẩu (tối thiểu 6 ký tự)"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <TextInput style={styles.input} placeholder="Email" autoCapitalize="none"
+          keyboardType="email-address" value={email} onChangeText={setEmail} />
+        <TextInput style={styles.input} placeholder="Mật khẩu (tối thiểu 6 ký tự)"
+          secureTextEntry value={password} onChangeText={setPassword} />
 
         {!isLogin && (
           <>
-            <TextInput
-              style={styles.input}
-              placeholder="Số điện thoại"
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={setPhone}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Địa chỉ"
-              value={address}
-              onChangeText={setAddress}
-            />
+            <TextInput style={styles.input} placeholder="Số điện thoại"
+              keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            <TextInput style={styles.input} placeholder="Địa chỉ"
+              value={address} onChangeText={setAddress} />
           </>
         )}
 
         <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
-          {loading
-            ? <ActivityIndicator color="#fff" />
+          {loading ? <ActivityIndicator color="#fff" />
             : <Text style={styles.buttonText}>{isLogin ? 'Đăng nhập' : 'Đăng ký'}</Text>}
         </TouchableOpacity>
 
@@ -104,16 +79,14 @@ export default function AuthScreen() {
   );
 }
 
-function mapError(code) {
-  const m = {
-    'auth/invalid-email': 'Email không hợp lệ.',
-    'auth/email-already-in-use': 'Email đã được sử dụng.',
-    'auth/weak-password': 'Mật khẩu quá yếu (tối thiểu 6 ký tự).',
-    'auth/invalid-credential': 'Sai email hoặc mật khẩu.',
-    'auth/user-not-found': 'Không tìm thấy tài khoản.',
-    'auth/wrong-password': 'Sai mật khẩu.',
-  };
-  return m[code];
+function mapError(msg = '') {
+  if (msg.includes('EMAIL_EXISTS')) return 'Email đã được sử dụng.';
+  if (msg.includes('INVALID_LOGIN_CREDENTIALS') || msg.includes('INVALID_PASSWORD') || msg.includes('EMAIL_NOT_FOUND'))
+    return 'Sai email hoặc mật khẩu.';
+  if (msg.includes('WEAK_PASSWORD')) return 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+  if (msg.includes('INVALID_EMAIL')) return 'Email không hợp lệ.';
+  if (msg.includes('MISSING_PASSWORD')) return 'Vui lòng nhập mật khẩu.';
+  return msg || 'Có lỗi xảy ra.';
 }
 
 const styles = StyleSheet.create({

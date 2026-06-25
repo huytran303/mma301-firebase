@@ -1,97 +1,94 @@
-// screens/ProfileScreen.js — Quản lý & cập nhật thông tin người dùng
+// screens/ProfileScreen.js — Quản lý & cập nhật thông tin người dùng (REST API)
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import {
-  signOut, updateEmail, updatePassword,
-  reauthenticateWithCredential, EmailAuthProvider,
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebaseConfig';
+  updateAccount, getUserDoc, setUserDoc, signOut,
+} from '../firebaseRest';
 import {
   registerForPushNotificationsAsync, sendLocalNotification,
 } from '../notifications';
 
-export default function ProfileScreen() {
-  const user = auth.currentUser;
+export default function ProfileScreen({ session, onSession, onSignOut }) {
+  const uid = session.localId;
 
-  const [email, setEmail] = useState(user?.email || '');
+  const [email, setEmail] = useState(session.email || '');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [pushToken, setPushToken] = useState(null);
 
-  // Tải thông tin Firestore
+  // Tải thông tin Firestore (sđt, địa chỉ)
   useEffect(() => {
     (async () => {
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists()) {
-          const d = snap.data();
+        const d = await getUserDoc(session.idToken, uid);
+        if (d) {
           setPhone(d.phone || '');
           setAddress(d.address || '');
+          if (d.email) setEmail(d.email);
         }
       } catch (e) {
-        console.log('load profile error', e);
+        console.log('load profile error', e.message);
       }
     })();
-  }, []);
+  }, [session.idToken, uid]);
 
   // Đăng ký nhận push notification
   useEffect(() => {
     (async () => {
       const { token, error } = await registerForPushNotificationsAsync();
-      if (token) setPushToken(token);
-      else setPushToken(error);
+      setPushToken(token || error);
     })();
   }, []);
-
-  // Đăng nhập lại (bắt buộc trước khi đổi email/mật khẩu nhạy cảm)
-  const reauth = async () => {
-    if (!currentPassword) throw new Error('Nhập mật khẩu hiện tại để xác thực lại.');
-    const cred = EmailAuthProvider.credential(user.email, currentPassword);
-    await reauthenticateWithCredential(user, cred);
-  };
 
   const handleSave = async () => {
     setLoading(true);
     try {
-      // 1. Cập nhật email (nếu đổi) — cần reauth
-      if (email.trim() && email.trim() !== user.email) {
-        await reauth();
-        await updateEmail(user, email.trim());
+      let current = session;
+
+      // 1. Cập nhật email / mật khẩu qua Auth REST (nếu có thay đổi)
+      const emailChanged = email.trim() && email.trim() !== session.email;
+      if (emailChanged || newPassword) {
+        if (newPassword && newPassword.length < 6) {
+          throw new Error('WEAK_PASSWORD');
+        }
+        current = await updateAccount({
+          idToken: session.idToken,
+          email: emailChanged ? email.trim() : undefined,
+          password: newPassword || undefined,
+        });
+        onSession(current); // cập nhật idToken mới lên App
       }
-      // 2. Cập nhật mật khẩu (nếu nhập) — cần reauth
-      if (newPassword) {
-        if (newPassword.length < 6) throw new Error('Mật khẩu mới tối thiểu 6 ký tự.');
-        await reauth();
-        await updatePassword(user, newPassword);
-      }
-      // 3. Cập nhật sđt + địa chỉ vào Firestore
-      await setDoc(
-        doc(db, 'users', user.uid),
-        { email: email.trim(), phone: phone.trim(), address: address.trim() },
-        { merge: true }
-      );
+
+      // 2. Cập nhật sđt + địa chỉ vào Firestore
+      await setUserDoc(current.idToken, uid, {
+        email: email.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+      });
 
       setNewPassword('');
-      setCurrentPassword('');
       Alert.alert('Thành công', 'Đã cập nhật thông tin người dùng.');
     } catch (e) {
-      Alert.alert('Lỗi', mapError(e.code) || e.message);
+      Alert.alert('Lỗi', mapError(e.message));
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    onSignOut();
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.heading}>Thông tin người dùng</Text>
-      <Text style={styles.uid}>UID: {user?.uid}</Text>
+      <Text style={styles.uid}>UID: {uid}</Text>
 
       <Text style={styles.label}>Email</Text>
       <TextInput style={styles.input} value={email} onChangeText={setEmail}
@@ -108,10 +105,6 @@ export default function ProfileScreen() {
       <Text style={styles.label}>Mật khẩu mới (để trống nếu không đổi)</Text>
       <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword}
         secureTextEntry placeholder="Mật khẩu mới" />
-
-      <Text style={styles.label}>Mật khẩu hiện tại (bắt buộc khi đổi email/mật khẩu)</Text>
-      <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword}
-        secureTextEntry placeholder="Mật khẩu hiện tại" />
 
       <TouchableOpacity style={styles.button} onPress={handleSave} disabled={loading}>
         {loading ? <ActivityIndicator color="#fff" />
@@ -134,7 +127,7 @@ export default function ProfileScreen() {
 
       <TouchableOpacity
         style={[styles.button, { backgroundColor: '#dc2626', marginTop: 20 }]}
-        onPress={() => signOut(auth)}
+        onPress={handleSignOut}
       >
         <Text style={styles.buttonText}>Đăng xuất</Text>
       </TouchableOpacity>
@@ -142,15 +135,15 @@ export default function ProfileScreen() {
   );
 }
 
-function mapError(code) {
-  const m = {
-    'auth/requires-recent-login': 'Cần đăng nhập lại — hãy nhập đúng mật khẩu hiện tại.',
-    'auth/wrong-password': 'Mật khẩu hiện tại không đúng.',
-    'auth/invalid-credential': 'Mật khẩu hiện tại không đúng.',
-    'auth/email-already-in-use': 'Email mới đã được dùng bởi tài khoản khác.',
-    'auth/invalid-email': 'Email không hợp lệ.',
-  };
-  return m[code];
+function mapError(msg = '') {
+  if (msg.includes('WEAK_PASSWORD')) return 'Mật khẩu mới tối thiểu 6 ký tự.';
+  if (msg.includes('EMAIL_EXISTS')) return 'Email mới đã được dùng bởi tài khoản khác.';
+  if (msg.includes('INVALID_EMAIL')) return 'Email không hợp lệ.';
+  if (msg.includes('TOKEN_EXPIRED') || msg.includes('CREDENTIAL_TOO_OLD') || msg.includes('INVALID_ID_TOKEN'))
+    return 'Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.';
+  if (msg.includes('PERMISSION_DENIED'))
+    return 'Firestore từ chối ghi — kiểm tra Security Rules.';
+  return msg || 'Có lỗi xảy ra.';
 }
 
 const styles = StyleSheet.create({

@@ -1,22 +1,27 @@
-// App.js — điều hướng theo trạng thái đăng nhập Firebase
+// App.js — điều hướng theo trạng thái đăng nhập (quản lý session thủ công)
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebaseConfig';
+import { refreshSession } from './firebaseRest';
 import AuthScreen from './screens/AuthScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
 
+  // Khi mở app: làm mới phiên từ refreshToken đã lưu (nếu có)
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setChecking(false);
-    });
-    return unsub;
+    (async () => {
+      try {
+        const s = await refreshSession();
+        setSession(s);
+      } catch (e) {
+        setSession(null);
+      } finally {
+        setChecking(false);
+      }
+    })();
   }, []);
 
   if (checking) {
@@ -30,7 +35,15 @@ export default function App() {
   return (
     <>
       <StatusBar style="dark" />
-      {user ? <ProfileScreen /> : <AuthScreen />}
+      {session ? (
+        <ProfileScreen
+          session={session}
+          onSession={setSession}
+          onSignOut={() => setSession(null)}
+        />
+      ) : (
+        <AuthScreen onSignedIn={setSession} />
+      )}
     </>
   );
 }
