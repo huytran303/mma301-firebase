@@ -1,10 +1,14 @@
 {
-  "name": "firebase",
+  "name": "firebase-auth-fcm-app",
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~56.0.12",
+    "expo-device": "~56.0.4",
+    "expo-notifications": "~56.0.18",
     "expo-status-bar": "~56.0.4",
+    "firebase": "^12.15.0",
     "react": "19.2.3",
     "react-native": "0.85.3"
   },
